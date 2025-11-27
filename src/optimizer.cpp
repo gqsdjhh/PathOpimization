@@ -211,7 +211,8 @@ Trajectory TrajectoryOptimizer::solvePolynomial(
     };
     // 辅助函数 用来设置约束范围
     auto set_rng = [&](double lb, double ub) {
-        l_vec.push_back(lb); u_vec.push_back(ub); constraint_idx++;
+        l_vec.push_back(lb); u_vec.push_back(ub); 
+        constraint_idx++;
     };
 
     // --- (A) 起点终点约束 ---
@@ -259,7 +260,6 @@ Trajectory TrajectoryOptimizer::solvePolynomial(
             add_constraint(constraint_idx, i_end + off, a1);
             add_constraint(constraint_idx, i_prev1 + off, -2*a1);
             add_constraint(constraint_idx, i_prev2 + off, a1);
-            
             add_constraint(constraint_idx, j_next2 + off, -a2);
             add_constraint(constraint_idx, j_next1 + off, 2*a2);
             add_constraint(constraint_idx, j_start + off, -a2);
