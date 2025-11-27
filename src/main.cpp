@@ -9,7 +9,7 @@
 
 int main()
 {
-    auto grid = loadHandWrittenMap(2);
+    auto grid = loadHandWrittenMap(1);
     int W = grid[0].size();
     int H = grid.size();
 
@@ -92,7 +92,9 @@ int main()
     // -----------------------------
     TrajectoryOptimizer optimizer;
     OptimizationConfig opt_config;
-    opt_config.avg_vel = 2.0; // 2 m/s
+    opt_config.avg_vel = 2.0; 
+    opt_config.max_vel = 3.0; 
+    opt_config.max_acc = 2.0; 
     opt_config.w_vel = 1.0;   // 速度权重
     opt_config.w_acc = 3.0;   // 加速度权重
 
@@ -152,8 +154,8 @@ int main()
                 std::cout << "\n";
             };
 
-            print_poly_equation("x", [](const Point& p){ return p.x; });
-            print_poly_equation("y", [](const Point& p){ return p.y; });
+            print_poly_equation("x", [](const P2& p){ return p.x; });
+            print_poly_equation("y", [](const P2& p){ return p.y; });
         }
         std::cout << "===============================================\n\n";
 

@@ -114,6 +114,7 @@ double computeTimeScalingFactor(const BezierCurve& curve, double v_max, double a
     int n = 5;
     double T = curve.duration;
     double max_vel = 0.0;
+    double max_acc = 0.0;
     std::vector<P2> V;
 
     for (int i = 0; i < n; ++i) {
@@ -127,11 +128,11 @@ double computeTimeScalingFactor(const BezierCurve& curve, double v_max, double a
     for (int i = 0; i < n - 1; ++i) {
         P2 a = sub(V[i + 1], V[i]);
         double acc = std::sqrt(dot(a, a)) * n * (n - 1) / (T * T);
-        if (acc > max_vel) max_vel = acc;
+        if (acc > max_acc) max_acc = acc;
     }
 
     double ratio_vel = max_vel / v_max;
-    double ratio_acc = std::sqrt(max_vel / a_max);
+    double ratio_acc = std::sqrt(max_acc / a_max);
 
     return std::max(ratio_vel, ratio_acc);
 }
@@ -215,15 +216,50 @@ Trajectory TrajectoryOptimizer::solvePolynomial(
         constraint_idx++;
     };
 
-    // --- (A) 起点终点约束 ---
-    // Start X/Y
-    add_constraint(constraint_idx, 0, 1.0); set_rng(raw_path.front().x, raw_path.front().x); // x0
-    add_constraint(constraint_idx, n_vars_per_axis, 1.0); set_rng(raw_path.front().y, raw_path.front().y); // y0
-    
-    // End X/Y
-    int last_idx = (K - 1) * N_cp + 5;
-    add_constraint(constraint_idx, last_idx, 1.0); set_rng(raw_path.back().x, raw_path.back().x); // x_end
-    add_constraint(constraint_idx, last_idx + n_vars_per_axis, 1.0); set_rng(raw_path.back().y, raw_path.back().y); // y_end
+    // --- (A) 起点终点约束 (修改后) ---
+
+    // 1. 起点位置 (P0 = start)
+    add_constraint(constraint_idx, 0, 1.0); 
+    set_rng(raw_path.front().x, raw_path.front().x);
+    add_constraint(constraint_idx, n_vars_per_axis, 1.0); 
+    set_rng(raw_path.front().y, raw_path.front().y);
+
+    // 2. 起点速度 = 0 (P1 = P0)
+    // 实际上就是约束 P1 的坐标等于起点坐标
+    add_constraint(constraint_idx, 1, 1.0); // index 1 is P1
+    set_rng(raw_path.front().x, raw_path.front().x);
+    add_constraint(constraint_idx, 1 + n_vars_per_axis, 1.0);
+    set_rng(raw_path.front().y, raw_path.front().y);
+
+    // 3. 起点加速度 = 0 (P2 = P1 = P0)
+    add_constraint(constraint_idx, 2, 1.0); // index 2 is P2
+    set_rng(raw_path.front().x, raw_path.front().x);
+    add_constraint(constraint_idx, 2 + n_vars_per_axis, 1.0);
+    set_rng(raw_path.front().y, raw_path.front().y);
+
+    // -------------------------------------------------------
+
+    int last_idx = (K - 1) * N_cp + 5;     // P_N
+    int last_idx_1 = (K - 1) * N_cp + 4;   // P_{N-1}
+    int last_idx_2 = (K - 1) * N_cp + 3;   // P_{N-2}
+
+    // 4. 终点位置 (P_N = goal) 
+    add_constraint(constraint_idx, last_idx, 1.0); 
+    set_rng(raw_path.back().x, raw_path.back().x);
+    add_constraint(constraint_idx, last_idx + n_vars_per_axis, 1.0); 
+    set_rng(raw_path.back().y, raw_path.back().y);
+
+    // 5. 终点速度 = 0 (P_{N-1} = P_N)
+    add_constraint(constraint_idx, last_idx_1, 1.0); 
+    set_rng(raw_path.back().x, raw_path.back().x);
+    add_constraint(constraint_idx, last_idx_1 + n_vars_per_axis, 1.0); 
+    set_rng(raw_path.back().y, raw_path.back().y);
+
+    // 6. 终点加速度 = 0 (P_{N-2} = P_N)
+    add_constraint(constraint_idx, last_idx_2, 1.0); 
+    set_rng(raw_path.back().x, raw_path.back().x);
+    add_constraint(constraint_idx, last_idx_2 + n_vars_per_axis, 1.0); 
+    set_rng(raw_path.back().y, raw_path.back().y);
 
     // --- (B) 连续性约束 (C0, C1, C2) ---
     for (int k = 0; k < K - 1; ++k) {
@@ -314,8 +350,8 @@ Trajectory TrajectoryOptimizer::solvePolynomial(
         for (int i = 0; i < N_cp; ++i) {
             int idx = k * N_cp + i;
             curve.control_points.push_back({
-                (int)std::round(sol(idx)), 
-                (int)std::round(sol(idx + n_vars_per_axis))
+                sol(idx), 
+                sol(idx + n_vars_per_axis)
             });
         }
         traj.pieces.push_back(curve);
@@ -336,6 +372,10 @@ Trajectory TrajectoryOptimizer::solvePolynomial(
         for(auto& piece : traj.pieces) {
             piece.duration *= global_ratio;
         }
+    }
+    else {
+        std::cout << "[Optimizer] No Time Scaling Needed." << std::endl;
+        std::cout << "global_ratio = " << global_ratio << std::endl;
     }
 
     return traj;

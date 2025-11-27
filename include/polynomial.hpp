@@ -8,7 +8,7 @@
 // P(t) = (1-t)^5*P0 + 5(1-t)^4*t*P1 + 10(1-t)^3*t^2*P2 + 10(1-t)^2*t^3*P3 + 5(1-t)*t^4*P4 + t^5*P5, t in [0,1]
 class BezierCurve {
 public:
-    std::vector<Point> control_points; // 6个控制点
+    std::vector<P2> control_points; // 6个控制点
     double duration;                   // 该段时长 T
 
     BezierCurve() = default;
