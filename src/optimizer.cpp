@@ -8,7 +8,7 @@
 // ---------------------------------------------------------
 // 辅助函数
 // ---------------------------------------------------------
-double getDist(Point a, Point b) {
+inline double getDist(Point a, Point b) {
     return std::hypot(a.x - b.x, a.y - b.y);
 }
 
@@ -107,55 +107,33 @@ TrajectoryOptimizer::convertPolygonToConstraints(const Polygon& poly) {
 
 // 辅助：计算单段贝塞尔曲线需要的放缩系数
 double computeTimeScalingFactor(const BezierCurve& curve, double v_max, double a_max) {
-    // 1. 提取控制点
+    // 提取控制点
     std::vector<P2> P;
-    for(auto& p : curve.control_points) P.push_back({(double)p.x, (double)p.y});
-    
-    int n = 5; // 5阶
+    for (auto& p : curve.control_points) P.push_back({(double)p.x, (double)p.y});
+
+    int n = 5;
     double T = curve.duration;
+    double max_vel = 0.0;
+    std::vector<P2> V;
 
-    // 2. 计算速度控制点 (Order 4)
-    // V_i = n * (P_{i+1} - P_i)
-    // 真实速度 V(t) = Bezier(V_cp, u) / T
-    double max_vel_norm = 0.0;
-    std::vector<P2> V_cp; 
-    for(int i=0; i<n; ++i) {
-        P2 v = sub(P[i+1], P[i]); // sub函数来自你的 polygon_corridor.cpp，或手动写
-        // 注意：这里先不除以 T，最后统一算
-        double val = std::sqrt(dot(v, v)) * n; 
-        V_cp.push_back({v.x * n, v.y * n}); // 存下来用于算加速度
-        
-        if(val > max_vel_norm) max_vel_norm = val;
+    for (int i = 0; i < n; ++i) {
+        P2 v = sub(P[i + 1], P[i]);
+        double vel = std::sqrt(dot(v, v)) * n / T;
+        if (vel > max_vel) max_vel = vel;
+
+        V.push_back(v);
     }
 
-    // 3. 计算加速度控制点 (Order 3)
-    // A_i = (n-1) * (V_{i+1} - V_i)
-    // 真实加速度 A(t) = Bezier(A_cp, u) / T^2
-    double max_acc_norm = 0.0;
-    for(int i=0; i<n-1; ++i) {
-        P2 v_diff = sub(V_cp[i+1], V_cp[i]); // V_cp 已经是 P的差分乘以n了
-        // 这里需要再乘以 (n-1) = 4
-        // 实际上 A_control = n*(n-1)*(P_{i+2} - 2P_{i+1} + P_i)
-        // 但我们要用 V_cp 算出的值
-        // V_cp 存储的是 (P_{i+1}-P_i)
-        // 所以我们算的 v_diff 实际上没有乘以 n，上面 V_cp push的时候我仅仅push了向量
-        // 修正一下逻辑：
-        
-        // 更简单的写法：直接用原始点算
-        // A_k = n * (n-1) * (P_{k+2} - 2P_{k+1} + P_k)
-        P2 acc_vec = add(sub(P[i+2], mul(P[i+1], 2.0)), P[i]);
-        double val = std::sqrt(dot(acc_vec, acc_vec)) * n * (n - 1);
-        if(val > max_acc_norm) max_acc_norm = val;
+    for (int i = 0; i < n - 1; ++i) {
+        P2 a = sub(V[i + 1], V[i]);
+        double acc = std::sqrt(dot(a, a)) * n * (n - 1) / (T * T);
+        if (acc > max_vel) max_vel = acc;
     }
 
-    // 4. 计算需要的比例 Ratio
-    // 我们需要: max_vel_norm / (T * ratio) <= v_max
-    //           max_acc_norm / (T * ratio)^2 <= a_max
-    
-    double ratio_v = max_vel_norm / (T * v_max);
-    double ratio_a = std::sqrt(max_acc_norm / (T * T * a_max));
+    double ratio_vel = max_vel / v_max;
+    double ratio_acc = std::sqrt(max_vel / a_max);
 
-    return std::max(1.0, std::max(ratio_v, ratio_a));
+    return std::max(ratio_vel, ratio_acc);
 }
 
 // ---------------------------------------------------------
