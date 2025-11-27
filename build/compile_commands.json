@@ -1,0 +1,44 @@
+[
+{
+  "directory": "/home/tcd/code/test/test_bezier/build",
+  "command": "/usr/bin/g++ -DOSQP_EIGEN_OSQP_IS_V1 -DOSQP_EIGEN_OSQP_IS_V1_FINAL -DOSQP_SHARED_LIB -I/home/tcd/code/test/test_bezier/include -isystem /usr/include/eigen3 -isystem /usr/local/include/osqp -g -std=gnu++17 -o CMakeFiles/a_star_grid.dir/src/main.cpp.o -c /home/tcd/code/test/test_bezier/src/main.cpp",
+  "file": "/home/tcd/code/test/test_bezier/src/main.cpp",
+  "output": "CMakeFiles/a_star_grid.dir/src/main.cpp.o"
+},
+{
+  "directory": "/home/tcd/code/test/test_bezier/build",
+  "command": "/usr/bin/g++ -DOSQP_EIGEN_OSQP_IS_V1 -DOSQP_EIGEN_OSQP_IS_V1_FINAL -DOSQP_SHARED_LIB -I/home/tcd/code/test/test_bezier/include -isystem /usr/include/eigen3 -isystem /usr/local/include/osqp -g -std=gnu++17 -o CMakeFiles/a_star_grid.dir/src/grid.cpp.o -c /home/tcd/code/test/test_bezier/src/grid.cpp",
+  "file": "/home/tcd/code/test/test_bezier/src/grid.cpp",
+  "output": "CMakeFiles/a_star_grid.dir/src/grid.cpp.o"
+},
+{
+  "directory": "/home/tcd/code/test/test_bezier/build",
+  "command": "/usr/bin/g++ -DOSQP_EIGEN_OSQP_IS_V1 -DOSQP_EIGEN_OSQP_IS_V1_FINAL -DOSQP_SHARED_LIB -I/home/tcd/code/test/test_bezier/include -isystem /usr/include/eigen3 -isystem /usr/local/include/osqp -g -std=gnu++17 -o CMakeFiles/a_star_grid.dir/src/astar.cpp.o -c /home/tcd/code/test/test_bezier/src/astar.cpp",
+  "file": "/home/tcd/code/test/test_bezier/src/astar.cpp",
+  "output": "CMakeFiles/a_star_grid.dir/src/astar.cpp.o"
+},
+{
+  "directory": "/home/tcd/code/test/test_bezier/build",
+  "command": "/usr/bin/g++ -DOSQP_EIGEN_OSQP_IS_V1 -DOSQP_EIGEN_OSQP_IS_V1_FINAL -DOSQP_SHARED_LIB -I/home/tcd/code/test/test_bezier/include -isystem /usr/include/eigen3 -isystem /usr/local/include/osqp -g -std=gnu++17 -o CMakeFiles/a_star_grid.dir/src/visualize.cpp.o -c /home/tcd/code/test/test_bezier/src/visualize.cpp",
+  "file": "/home/tcd/code/test/test_bezier/src/visualize.cpp",
+  "output": "CMakeFiles/a_star_grid.dir/src/visualize.cpp.o"
+},
+{
+  "directory": "/home/tcd/code/test/test_bezier/build",
+  "command": "/usr/bin/g++ -DOSQP_EIGEN_OSQP_IS_V1 -DOSQP_EIGEN_OSQP_IS_V1_FINAL -DOSQP_SHARED_LIB -I/home/tcd/code/test/test_bezier/include -isystem /usr/include/eigen3 -isystem /usr/local/include/osqp -g -std=gnu++17 -o CMakeFiles/a_star_grid.dir/src/adaptive_segmentation.cpp.o -c /home/tcd/code/test/test_bezier/src/adaptive_segmentation.cpp",
+  "file": "/home/tcd/code/test/test_bezier/src/adaptive_segmentation.cpp",
+  "output": "CMakeFiles/a_star_grid.dir/src/adaptive_segmentation.cpp.o"
+},
+{
+  "directory": "/home/tcd/code/test/test_bezier/build",
+  "command": "/usr/bin/g++ -DOSQP_EIGEN_OSQP_IS_V1 -DOSQP_EIGEN_OSQP_IS_V1_FINAL -DOSQP_SHARED_LIB -I/home/tcd/code/test/test_bezier/include -isystem /usr/include/eigen3 -isystem /usr/local/include/osqp -g -std=gnu++17 -o CMakeFiles/a_star_grid.dir/src/polygon_corridor.cpp.o -c /home/tcd/code/test/test_bezier/src/polygon_corridor.cpp",
+  "file": "/home/tcd/code/test/test_bezier/src/polygon_corridor.cpp",
+  "output": "CMakeFiles/a_star_grid.dir/src/polygon_corridor.cpp.o"
+},
+{
+  "directory": "/home/tcd/code/test/test_bezier/build",
+  "command": "/usr/bin/g++ -DOSQP_EIGEN_OSQP_IS_V1 -DOSQP_EIGEN_OSQP_IS_V1_FINAL -DOSQP_SHARED_LIB -I/home/tcd/code/test/test_bezier/include -isystem /usr/include/eigen3 -isystem /usr/local/include/osqp -g -std=gnu++17 -o CMakeFiles/a_star_grid.dir/src/optimizer.cpp.o -c /home/tcd/code/test/test_bezier/src/optimizer.cpp",
+  "file": "/home/tcd/code/test/test_bezier/src/optimizer.cpp",
+  "output": "CMakeFiles/a_star_grid.dir/src/optimizer.cpp.o"
+}
+]
