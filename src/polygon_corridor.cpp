@@ -6,30 +6,6 @@
 #include <iostream>
 #include <unordered_set>
 
-// -----------------------------------------------------------
-// 数学辅助函数
-// -----------------------------------------------------------
-
-// 向量点积
-double dot(P2 a, P2 b) {
-    return a.x * b.x + a.y * b.y;
-}
-
-// 向量减法
-P2 sub(P2 a, P2 b) {
-    return {a.x - b.x, a.y - b.y};
-}
-
-// 向量加法
-P2 add(P2 a, P2 b) {
-    return {a.x + b.x, a.y + b.y};
-}
-
-// 向量乘标量
-P2 mul(P2 a, double s) {
-    return {a.x * s, a.y * s};
-}
-
 // 计算点到线段的最短距离对应的线段上的点
 // 线段: p1 -> p2, 目标点: p
 P2 closestPointOnSegment(P2 p, P2 p1, P2 p2) {

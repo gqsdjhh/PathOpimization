@@ -11,6 +11,8 @@ struct OptimizationConfig {
     double avg_vel = 1.5;     // 期望平均速度 (m/s)
     double w_vel = 1.0;       // 速度代价权重
     double w_acc = 3.0;       // 加速度代价权重
+    double max_vel = 3.0;     // 最大速度限制 (m/s)
+    double max_acc = 5.0;     // 最大加速度限制 (m/s^2)
 };
 
 class TrajectoryOptimizer {
@@ -28,3 +30,5 @@ public:
 private:
     std::pair<Eigen::MatrixXd, Eigen::VectorXd> convertPolygonToConstraints(const Polygon& poly);
 };
+
+double computeTimeScalingFactor(const BezierCurve& curve, double v_max, double a_max);
