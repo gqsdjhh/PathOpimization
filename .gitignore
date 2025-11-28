@@ -1,0 +1,29 @@
+# --- 编译产生的临时文件 ---
+build/
+bin/
+lib/
+*.o
+*.obj
+*.so
+*.dll
+*.dylib
+*.exe
+*.a
+
+# --- CMake 产生的临时文件 ---
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+
+# --- IDE (VS Code) 配置文件 ---
+.vscode/
+# 如果你想保留 launch.json (调试配置) 但忽略其他，可以这样写：
+# .vscode/*
+# !.vscode/launch.json
+# !.vscode/tasks.json
+
+# --- 操作系统生成的垃圾文件 ---
+.DS_Store
+Thumbs.db

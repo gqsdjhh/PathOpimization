@@ -1,3 +1,0 @@
-/home/tcd/code/test/test_bezier/build/CMakeFiles/a_star_grid.dir
-/home/tcd/code/test/test_bezier/build/CMakeFiles/edit_cache.dir
-/home/tcd/code/test/test_bezier/build/CMakeFiles/rebuild_cache.dir
