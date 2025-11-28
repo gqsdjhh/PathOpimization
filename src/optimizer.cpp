@@ -216,7 +216,7 @@ Trajectory TrajectoryOptimizer::solvePolynomial(
         constraint_idx++;
     };
 
-    // --- (A) 起点终点约束 (修改后) ---
+    // --- (A) 起点终点约束 
 
     // 1. 起点位置 (P0 = start)
     add_constraint(constraint_idx, 0, 1.0); 
@@ -360,7 +360,7 @@ Trajectory TrajectoryOptimizer::solvePolynomial(
     // 7. 执行时间放缩 (Time Scaling)
     double global_ratio = 1.0;
     
-    // 策略A：全局统一放缩 (保持各段相对时间比例不变，最平滑)
+    // 全局统一放缩 (保持各段相对时间比例不变，最平滑)
     for(const auto& piece : traj.pieces) {
         double r = computeTimeScalingFactor(piece, config.max_vel, config.max_acc);
         if(r > global_ratio) global_ratio = r;

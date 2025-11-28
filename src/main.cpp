@@ -104,7 +104,7 @@ int main()
         std::cout << "优化成功！总时长: " << traj.getTotalDuration() << "s\n";
         
         // ==========================================
-        //  新增：打印每一段的数学表达式
+        //  打印每一段的数学表达式
         // ==========================================
         std::cout << "\n================ 轨迹数学表达式 ================\n";
         std::cout << "公式通式 (5阶贝塞尔): P(t) = Σ [ C_i * (1-u)^(5-i) * u^i ]\n";
@@ -126,7 +126,7 @@ int main()
             }
             std::cout << "\n\n";
 
-            // Lambda 函数：打印单个维度的方程
+            // Lambda 函数：打印单个维度的方程fc
             auto print_poly_equation = [&](const char* axis, auto get_val) {
                 std::cout << "  " << axis << "(t) = ";
                 for (int i = 0; i <= 5; ++i) {
