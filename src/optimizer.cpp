@@ -12,62 +12,12 @@ inline double getDist(Point a, Point b) {
     return std::hypot(a.x - b.x, a.y - b.y);
 }
 
-// 计算组合数 C(n, k)
-double binomial(int n, int k) {
-    if (k < 0 || k > n) return 0;
-    double res = 1;
-    for (int i = 1; i <= k; ++i) res = res * (n - i + 1) / i;
-    return res;
-}
-
-// 计算 Bernstein 基函数 B_{i,n}(u) 在 u 处的 k 阶导数值
-double bernstein_poly_deriv(int primitive_order, int i, double u, int target_derivative_order) {
-    if (target_derivative_order == 0) {
-        return binomial(primitive_order, i) * std::pow(u, i) * std::pow(1 - u, primitive_order - i);
-    }
-    // 递归公式: B'_{i,n}(u) = n * (B_{i-1, n-1}(u) - B_{i, n-1}(u))
-    return primitive_order * (bernstein_poly_deriv(primitive_order - 1, i - 1, u, target_derivative_order - 1)
-            - bernstein_poly_deriv(primitive_order - 1, i, u, target_derivative_order - 1));
-}
-
-// 通用：计算 k 阶导数的 Hessian 矩阵 (Degree N)
-// H(i, j) = Integral(0~1) [ B^(k)_i(u) * B^(k)_j(u) ] du
-Eigen::MatrixXd computeBernsteinHessian(int n_degree, int target_derivative_order) {
-    //+1是因为N阶曲线有N+1个控制点
-    Eigen::MatrixXd H(n_degree + 1, n_degree + 1);
-    int steps = 100; // 积分步数
-    double dt = 1.0 / steps;
-    
-    for (int i = 0; i < n_degree + 1; ++i) {
-        for (int j = i; j < n_degree + 1; ++j) {
-            double sum = 0.0;
-
-            for(int t = 0; t < steps; ++t) {
-                // 数值积分时中点法一般比左端点法精度更高，这里使用左端点法会导致误差过大，H矩阵失去正定，OSQP求解报错
-                double u = (t + 0.5) * dt;
-                double bi = bernstein_poly_deriv(n_degree, i, u, target_derivative_order);
-                double bj = bernstein_poly_deriv(n_degree, j, u, target_derivative_order);
-
-                sum += bi * bj * dt;
-            }
-
-            H(i, j) = sum;
-            H(j, i) = sum; // 对称矩阵
-        }
-    }
-
-    return H;
-}
-
 // 辅助：将多边形转换为半平面 Ax + By <= C
 std::pair<Eigen::MatrixXd, Eigen::VectorXd> 
 TrajectoryOptimizer::convertPolygonToConstraints(const Polygon& poly) {
     int n = poly.size();
-
     Eigen::MatrixXd AB(n, 2);
     Eigen::VectorXd C(n);
-
-    // 计算多边形中心点
     double center_x = 0.0, center_y = 0.0;
     for (const auto& p : poly) {
         center_x += p.x;
@@ -75,66 +25,41 @@ TrajectoryOptimizer::convertPolygonToConstraints(const Polygon& poly) {
     }
     center_x /= n;
     center_y /= n;
-
-    // 循环访问每一个顶点p1和下一个顶点p2这两个点构成多边形的一条边。
     for (int i = 0; i < n; ++ i) {
         P2 p1 = poly[i];
         P2 p2 = poly[(i + 1) % n];
-
-        // 求方向向量
         double Kx = p1.x - p2.x;
         double Ky = p1.y - p2.y;
-
-        // 利用方向向量 * 法向量 = 0 求法向量
         double A = -Ky;
         double B = Kx;
-
         AB(i, 0) = A;
         AB(i, 1) = B;
-
         C(i) = (A * p1.x + B * p1.y);
-        
-        // 确保中心点在半平面内
         if (AB(i, 0) * center_x + AB(i, 1) * center_y > C(i)) {
             AB(i, 0) = - AB(i, 0);
             AB(i, 1) = - AB(i, 1);
             C(i) = - C(i);
         }
     }
-
     return std::make_pair(AB, C);
 }
 
-// 辅助：计算单段贝塞尔曲线需要的放缩系数
-double computeTimeScalingFactor(const BezierCurve& curve, double v_max, double a_max) {
-    // 提取控制点
-    std::vector<P2> P;
-    for (auto& p : curve.control_points) P.push_back({(double)p.x, (double)p.y});
-
-    int n = 5;
-    double T = curve.duration;
+// 辅助：计算单段多项式曲线需要的放缩系数
+double computeTimeScalingFactor(const PolynomialCurve& curve, double v_max) {
     double max_vel = 0.0;
-    double max_acc = 0.0;
-    std::vector<P2> V;
+    double t = curve.duration_;
+    double dt = 0.05;               // 采样时间间隔
 
-    for (int i = 0; i < n; ++i) {
-        P2 v = sub(P[i + 1], P[i]);
-        double vel = std::sqrt(dot(v, v)) * n / T;
+    for (double i = 0.0; i < t; i += dt) {
+        std::pair<double, double> p1 = curve.evaluate(i);
+        std::pair<double, double> p2 = curve.evaluate(std::min(i + dt, t)); 
+
+        double vx = (p2.first - p1.first) / dt;
+        double vy = (p2.second - p1.second) / dt;
+        double vel = std::sqrt(vx*vx + vy*vy);
         if (vel > max_vel) max_vel = vel;
-
-        V.push_back(v);
     }
-
-    for (int i = 0; i < n - 1; ++i) {
-        P2 a = sub(V[i + 1], V[i]);
-        double acc = std::sqrt(dot(a, a)) * n * (n - 1) / (T * T);
-        if (acc > max_acc) max_acc = acc;
-    }
-
-    double ratio_vel = max_vel / v_max;
-    double ratio_acc = std::sqrt(max_acc / a_max);
-
-    return std::max(ratio_vel, ratio_acc);
+    return max_vel / v_max;
 }
 
 // ---------------------------------------------------------
@@ -146,22 +71,17 @@ Trajectory TrajectoryOptimizer::solvePolynomial(
     const std::vector<Segment>& segments,
     OptimizationConfig config
 ) {
-    if (segments.empty()) return {};
+    if (segments.empty()) return Trajectory();
 
-    int K = segments.size();
-    int N_poly = 5;         // 5阶贝塞尔
-    int N_cp = N_poly + 1;  // 每段 6 个控制点
-    int n_vars_per_axis = K * N_cp;
-    int n_vars = 2 * n_vars_per_axis;
-
-    // 1. 预计算 Hessian 矩阵 (Velocity & Acceleration)
-    static Eigen::MatrixXd H_vel = computeBernsteinHessian(N_poly, 1);
-    static Eigen::MatrixXd H_acc = computeBernsteinHessian(N_poly, 2);
+    int segment_num = segments.size();
+    int polynomial_order = 4; // 三次多项式 
+    int total_vars = segment_num * polynomial_order * 2; 
 
     // 2. 时间分配
-    std::vector<double> T(K);
-    for (int i = 0; i < K; ++i) {
+    std::vector<double> T(segment_num);
+    for (int i = 0; i < segment_num; ++i) {
         double dist = getDist(segments[i].start, segments[i].end);
+
         T[i] = std::max(dist / config.avg_vel, 0.5); 
     }
 
@@ -169,166 +89,165 @@ Trajectory TrajectoryOptimizer::solvePolynomial(
     solver.settings()->setVerbosity(false);
     solver.settings()->setWarmStart(true);
 
-    // 3. 构建目标函数矩阵 P
-    Eigen::SparseMatrix<double> P(n_vars, n_vars);
+    // 3. 构建目标函数矩阵 P 
+    Eigen::SparseMatrix<double> P(total_vars, total_vars);
     std::vector<Eigen::Triplet<double>> p_triplets;
 
-    for (int k = 0; k < K; ++k) {
-        // 积分换元系数:
-        // Vel term: integral (p'(t))^2 dt = (1/T) * integral (p'(u))^2 du
-        // Acc term: integral (p''(t))^2 dt = (1/T^3) * integral (p''(u))^2 du
-        double c_vel = config.w_vel / T[k];
-        double c_acc = config.w_acc / std::pow(T[k], 3); // 注意这里是T的三次方
+    // minimum jerk
+    for (size_t i = 0; i < segment_num; ++i) {
+        double t5 = std::pow(T[i], 5);
 
-        for (int r = 0; r < N_cp; ++r) {
-            for (int c = 0; c < N_cp; ++c) {
-                // 组合 Velocity 和 Acceleration 代价
-                double val = c_vel * H_vel(r, c) + c_acc * H_acc(r, c);
-                
-                // X 轴
-                int idx_x = k * N_cp + r;
-                int idy_x = k * N_cp + c;
-                p_triplets.emplace_back(idx_x, idy_x, val);
-                
-                // Y 轴
-                p_triplets.emplace_back(idx_x + n_vars_per_axis, idy_x + n_vars_per_axis, val);
-            }
+        double value = 72.0 / t5; 
+        for (int axis = 0; axis < 2; ++axis) {  
+            int row = i * polynomial_order * 2 + axis * polynomial_order + 3;
+
+            p_triplets.emplace_back(row, row, value);
         }
     }
     P.setFromTriplets(p_triplets.begin(), p_triplets.end());
 
-    // 目标函数线性项 q
-    // 设置为零向量
-    Eigen::VectorXd q = Eigen::VectorXd::Zero(n_vars);
+    Eigen::VectorXd q = Eigen::VectorXd::Zero(total_vars);
 
     // 4. 构建约束
     std::vector<Eigen::Triplet<double>> A_triplets;
     std::vector<double> l_vec, u_vec;
     int constraint_idx = 0;
 
-    // 辅助函数 用来添加约束
     auto add_constraint = [&](int row, int col, double value) {
         A_triplets.emplace_back(row, col, value);
     };
-    // 辅助函数 用来设置约束范围
+
     auto set_rng = [&](double lb, double ub) {
-        l_vec.push_back(lb); u_vec.push_back(ub); 
+        l_vec.push_back(lb); 
+        u_vec.push_back(ub); 
         constraint_idx++;
     };
 
-    // --- (A) 起点终点约束 
 
-    // 1. 起点位置 (P0 = start)
-    add_constraint(constraint_idx, 0, 1.0); 
-    set_rng(raw_path.front().x, raw_path.front().x);
-    add_constraint(constraint_idx, n_vars_per_axis, 1.0); 
-    set_rng(raw_path.front().y, raw_path.front().y);
+    // 起点状态
+    for (size_t axis = 0; axis < 2; ++axis) {
+        int column = axis * polynomial_order;
 
-    // 2. 起点速度 = 0 (P1 = P0)
-    // 实际上就是约束 P1 的坐标等于起点坐标
-    add_constraint(constraint_idx, 1, 1.0); // index 1 is P1
-    set_rng(raw_path.front().x, raw_path.front().x);
-    add_constraint(constraint_idx, 1 + n_vars_per_axis, 1.0);
-    set_rng(raw_path.front().y, raw_path.front().y);
+        // Pos
+        add_constraint(constraint_idx, column, 1.0);
+        double pos = (axis == 0) ? segments[0].start.x : segments[0].start.y;
+        set_rng(pos, pos);
 
-    // 3. 起点加速度 = 0 (P2 = P1 = P0)
-    add_constraint(constraint_idx, 2, 1.0); // index 2 is P2
-    set_rng(raw_path.front().x, raw_path.front().x);
-    add_constraint(constraint_idx, 2 + n_vars_per_axis, 1.0);
-    set_rng(raw_path.front().y, raw_path.front().y);
+        // Vel
+        add_constraint(constraint_idx, column + 1, 1.0);
+        set_rng(0.0, 0.0);  
+    }
 
-    // -------------------------------------------------------
 
-    int last_idx = (K - 1) * N_cp + 5;     // P_N
-    int last_idx_1 = (K - 1) * N_cp + 4;   // P_{N-1}
-    int last_idx_2 = (K - 1) * N_cp + 3;   // P_{N-2}
+    // 终点状态
+    for (size_t axis = 0; axis < 2; ++axis) {
+        int column = (segment_num - 1) * polynomial_order * 2 + axis * polynomial_order;
 
-    // 4. 终点位置 (P_N = goal) 
-    add_constraint(constraint_idx, last_idx, 1.0); 
-    set_rng(raw_path.back().x, raw_path.back().x);
-    add_constraint(constraint_idx, last_idx + n_vars_per_axis, 1.0); 
-    set_rng(raw_path.back().y, raw_path.back().y);
+        // Pos: c0 + c1*t + c2*t^2 + c3*t^3
+        add_constraint(constraint_idx, column + 0, 1.0);
+        add_constraint(constraint_idx, column + 1, 1.0);
+        add_constraint(constraint_idx, column + 2, 1.0);
+        add_constraint(constraint_idx, column + 3, 1.0);
+        double pos = (axis == 0) ? segments.back().end.x : segments.back().end.y;
+        set_rng(pos, pos);
 
-    // 5. 终点速度 = 0 (P_{N-1} = P_N)
-    add_constraint(constraint_idx, last_idx_1, 1.0); 
-    set_rng(raw_path.back().x, raw_path.back().x);
-    add_constraint(constraint_idx, last_idx_1 + n_vars_per_axis, 1.0); 
-    set_rng(raw_path.back().y, raw_path.back().y);
+        // Vel: c1 + 2*c2*t + 3*c3*t^2
+        add_constraint(constraint_idx, column + 1, 1.0);
+        add_constraint(constraint_idx, column + 2, 2.0);
+        add_constraint(constraint_idx, column + 3, 3.0);
+        set_rng(0.0, 0.0);  
+    }
 
-    // 6. 终点加速度 = 0 (P_{N-2} = P_N)
-    add_constraint(constraint_idx, last_idx_2, 1.0); 
-    set_rng(raw_path.back().x, raw_path.back().x);
-    add_constraint(constraint_idx, last_idx_2 + n_vars_per_axis, 1.0); 
-    set_rng(raw_path.back().y, raw_path.back().y);
-
-    // --- (B) 连续性约束 (C0, C1, C2) ---
-    for (int k = 0; k < K - 1; ++k) {
-        int i_end = k * N_cp + 5;
-        int i_prev1 = k * N_cp + 4;
-        int i_prev2 = k * N_cp + 3;
-        
-        int j_start = (k + 1) * N_cp + 0;
-        int j_next1 = (k + 1) * N_cp + 1;
-        int j_next2 = (k + 1) * N_cp + 2;
-
-        double Tk = T[k], Tk1 = T[k+1];
+    
+    // 连续性
+    for (int i = 0; i < segment_num - 1; ++i) {
+        double T_cur = T[i];
+        double T_next = T[i+1];
 
         for (int axis = 0; axis < 2; ++axis) {
-            int off = axis * n_vars_per_axis;
+            int index_current = i * polynomial_order * 2 + axis * polynomial_order;
+            int index_next = (i + 1) * polynomial_order * 2 + axis * polynomial_order;
 
-            // C0: Pos continuous
-            add_constraint(constraint_idx, i_end + off, 1.0);
-            add_constraint(constraint_idx, j_start + off, -1.0);
-            set_rng(0, 0);
+            // 位置连续
+            // c_{i,0} + c_{i,1} + c_{i,2} + c_{i,3}) - c_{i+1,0} = 0
+            add_constraint(constraint_idx, index_current + 0, 1.0); 
+            add_constraint(constraint_idx, index_current + 1, 1.0);   
+            add_constraint(constraint_idx, index_current + 2, 1.0);  
+            add_constraint(constraint_idx, index_current + 3, 1.0);  
+            add_constraint(constraint_idx, index_next + 0, -1.0);   
+            set_rng(0.0, 0.0);
 
-            // C1: Vel continuous -> (P_n - P_{n-1})/Tk = (Q_1 - Q_0)/Tk1
-            double s1 = 1.0 / Tk;
-            double s2 = 1.0 / Tk1;
-            add_constraint(constraint_idx, i_end + off, s1);
-            add_constraint(constraint_idx, i_prev1 + off, -s1);
-            add_constraint(constraint_idx, j_next1 + off, -s2);
-            add_constraint(constraint_idx, j_start + off, s2);
-            set_rng(0, 0);
+            // 速度连续
+            // T_{i+1} * ( c_{i,1} + 2c_{i,2} + 3c_{i,3} ) - T_i * c_{i+1,1} = 0
+            add_constraint(constraint_idx, index_current + 1, 1.0 * T_next);
+            add_constraint(constraint_idx, index_current + 2, 2.0 * T_next);
+            add_constraint(constraint_idx, index_current + 3, 3.0 * T_next);
+            add_constraint(constraint_idx, index_next + 1, -1.0 * T_cur);
+            set_rng(0.0, 0.0);
 
-            // C2: Acc continuous -> (P_n - 2P_{n-1} + P_{n-2})/Tk^2 = ...
-            double a1 = 1.0 / (Tk*Tk);
-            double a2 = 1.0 / (Tk1*Tk1);
-            add_constraint(constraint_idx, i_end + off, a1);
-            add_constraint(constraint_idx, i_prev1 + off, -2*a1);
-            add_constraint(constraint_idx, i_prev2 + off, a1);
-            add_constraint(constraint_idx, j_next2 + off, -a2);
-            add_constraint(constraint_idx, j_next1 + off, 2*a2);
-            add_constraint(constraint_idx, j_start + off, -a2);
-            set_rng(0, 0);
+            // 加速度连续
+            // T_{i+1}^2 * ( 2c_{i,2} + 6c_{i,3}) - T_i^2 * 2c_{i + 1, c2} = 0
+            add_constraint(constraint_idx, index_current + 2, 2.0 * T_next * T_next);
+            add_constraint(constraint_idx, index_current + 3, 6.0 * T_next * T_next);
+            add_constraint(constraint_idx, index_next + 2, -2.0 * T_cur * T_cur);
+            set_rng(0.0, 0.0);
         }
     }
 
-    // --- (C) 安全走廊约束 (Convex Hull Property) ---
-    for (int k = 0; k < K; ++k) {
 
-        // 获取 Corridor 对应的线性约束 Ax + By <= C
-        auto [Mat, Ub] = convertPolygonToConstraints(corridors[k]);
-        
-        for (int i = 0; i < N_cp; ++i) {
-            int idx = k * N_cp + i;
-            // 获取每个系数 A, B, C
-            for (int r = 0; r < Mat.rows(); ++r) {
-                double A = Mat(r, 0), B = Mat(r, 1), C = Ub(r);
-                add_constraint(constraint_idx, idx, A);                   // A*x
-                add_constraint(constraint_idx, idx + n_vars_per_axis, B); // B*y
-                set_rng(-OsqpEigen::INFTY, C);
+    // 安全走廊约束
+    constexpr int samples_per_segment = 3;  
+
+    for (int k = 0; k < segment_num; ++k) {
+        auto [Mat, Ub] = convertPolygonToConstraints(corridors[k]); 
+        int num_planes = Mat.rows();
+        if (num_planes == 0) continue;
+
+        // 在每个线段上均匀采样
+        double dt_sample = T[k] / (samples_per_segment + 1);
+
+        for (int s = 0; s <= samples_per_segment; ++s) {
+            double t = s * dt_sample;
+            double s_t = t / T[k];
+            double s_pow1 = s_t;
+            double s_pow2 = s_t * s_t;
+            double s_pow3 = s_pow2 * s_t;
+
+            for (int r = 0; r < num_planes; ++r) {
+                double A_val = Mat(r, 0);
+                double B_val = Mat(r, 1);
+                double C_val = Ub(r);
+
+                int idx_x = k * polynomial_order * 2;
+                int idx_y = k * polynomial_order * 2 + polynomial_order;
+
+                // X 轴
+                add_constraint(constraint_idx, idx_x + 0, A_val * 1.0);
+                add_constraint(constraint_idx, idx_x + 1, A_val * s_pow1);
+                add_constraint(constraint_idx, idx_x + 2, A_val * s_pow2);
+                add_constraint(constraint_idx, idx_x + 3, A_val * s_pow3);
+
+                // Y 轴
+                add_constraint(constraint_idx, idx_y + 0, B_val * 1.0);
+                add_constraint(constraint_idx, idx_y + 1, B_val * s_pow1);
+                add_constraint(constraint_idx, idx_y + 2, B_val * s_pow2);
+                add_constraint(constraint_idx, idx_y + 3, B_val * s_pow3);
+
+                set_rng(-OsqpEigen::INFTY, C_val);
             }
         }
     }
 
     // 5. 求解
-    Eigen::SparseMatrix<double> A(constraint_idx, n_vars);
+    Eigen::SparseMatrix<double> A(constraint_idx, total_vars);
     A.setFromTriplets(A_triplets.begin(), A_triplets.end());
     
     Eigen::VectorXd l_e(l_vec.size()), u_e(u_vec.size());
-    for(size_t i=0; i<l_vec.size(); ++i) { l_e(i)=l_vec[i]; u_e(i)=u_vec[i]; }
+    for(size_t i=0; i<l_vec.size(); ++i) {
+        l_e(i)=l_vec[i]; u_e(i)=u_vec[i]; 
+    }
 
-    solver.data()->setNumberOfVariables(n_vars);
+    solver.data()->setNumberOfVariables(total_vars);
     solver.data()->setNumberOfConstraints(constraint_idx);
     if(!solver.data()->setHessianMatrix(P)) return {};
     if(!solver.data()->setGradient(q)) return {};
@@ -343,40 +262,40 @@ Trajectory TrajectoryOptimizer::solvePolynomial(
 
     // 6. 提取结果
     Eigen::VectorXd sol = solver.getSolution();
-    Trajectory traj;
-    for (int k = 0; k < K; ++k) {
-        BezierCurve curve;
-        curve.duration = T[k];
-        for (int i = 0; i < N_cp; ++i) {
-            int idx = k * N_cp + i;
-            curve.control_points.push_back({
-                sol(idx), 
-                sol(idx + n_vars_per_axis)
-            });
+    Trajectory trajectory;
+    for (int k = 0; k < segment_num; ++k) {
+        PolynomialCurve curve;
+        curve.duration_ = T[k];
+        
+        for (int axis = 0; axis < 2; ++axis) {
+            int index = k * polynomial_order * 2 + axis * polynomial_order;
+            for (int i = 0; i < polynomial_order; ++i) {
+                double val = sol(index + i);
+
+                if (axis == 0) curve.polynomial_x_coefficients_.push_back(val);
+                else           curve.polynomial_y_coefficients_.push_back(val);
+            }
         }
-        traj.pieces.push_back(curve);
+        trajectory.pieces.push_back(curve);
     }
 
     // 7. 执行时间放缩 (Time Scaling)
     double global_ratio = 1.0;
-    
-    // 全局统一放缩 (保持各段相对时间比例不变，最平滑)
-    for(const auto& piece : traj.pieces) {
-        double r = computeTimeScalingFactor(piece, config.max_vel, config.max_acc);
+    for(const auto& piece : trajectory.pieces) {
+        double r = computeTimeScalingFactor(piece, config.max_vel);
         if(r > global_ratio) global_ratio = r;
     }
 
-    // 应用放缩
-    if(global_ratio > 1.001) {
+    if(global_ratio > 1.01) {
         std::cout << "[Optimizer] Time Scaling Triggered: ratio = " << global_ratio << std::endl;
-        for(auto& piece : traj.pieces) {
-            piece.duration *= global_ratio;
+        for(auto& piece : trajectory.pieces) {
+            piece.duration_ *= global_ratio;
         }
     }
     else {
         std::cout << "[Optimizer] No Time Scaling Needed." << std::endl;
-        std::cout << "global_ratio = " << global_ratio << std::endl;
     }
 
-    return traj;
+    return trajectory;
 }
+

@@ -19,7 +19,6 @@ class TrajectoryOptimizer {
 public:
     TrajectoryOptimizer() = default;
 
-    // 多项式轨迹优化入口
     Trajectory solvePolynomial(
         const std::vector<Point>& raw_path,
         const std::vector<Polygon>& corridors,
@@ -31,4 +30,4 @@ private:
     std::pair<Eigen::MatrixXd, Eigen::VectorXd> convertPolygonToConstraints(const Polygon& poly);
 };
 
-double computeTimeScalingFactor(const BezierCurve& curve, double v_max, double a_max);
+double computeTimeScalingFactor(const PolynomialCurve& curve, double v_max);

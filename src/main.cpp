@@ -9,7 +9,7 @@
 
 int main()
 {
-    auto grid = loadHandWrittenMap(1);
+    auto grid = loadHandWrittenMap(2);
     int W = grid[0].size();
     int H = grid.size();
 
@@ -35,7 +35,6 @@ int main()
         std::cout << "找到路径！路径长度 = " << path.size() - 1 << " 步\n";
     }
 
-    print_grid_with_path(grid, start, goal, path);
     write_ppm_scaled("output.ppm", grid, start, goal, path, 20);
     std::cout << "已生成 output.ppm\n";
 
@@ -56,7 +55,6 @@ int main()
 
     for (auto &s : segments)
     {
-
         Polygon corridor = computeConvexCorridor(
             path,
             s.start_idx,
@@ -65,9 +63,9 @@ int main()
 
         corridors.push_back(corridor);
 
-        std::cout << "计算走廊段: ("
-                  << s.start_idx << ", " << s.end_idx << ") ,"
-                  << " polygon size = " << corridor.size() << "\n";
+        // std::cout << "计算走廊段: ("
+        //           << s.start_idx << ", " << s.end_idx << ") ,"
+        //           << " polygon size = " << corridor.size() << "\n";
     }
 
     // -----------------------------
@@ -75,102 +73,103 @@ int main()
     // -----------------------------
     for (int i = 0; i < corridors.size(); ++i)
     {
-
         if (corridors[i].empty())
         {
             std::cout << "Corridor " << i << " is empty, skip.\n";
             continue;
         }
-
         draw_polygon_ppm("corridor_segment" + std::to_string(i) + ".ppm",
                          corridors[i], grid, 20);
-        std::cout << "已生成 corridor_segment" << i << ".ppm\n";
+        // std::cout << "已生成 corridor_segment" << i << ".ppm\n";
     }
 
     // -----------------------------
-    // 5. 使用 OSQP 进行多项式优化 (最小化 Vel^2 + Acc^2)
+    // 5. 使用 OSQP 进行多项式优化
     // -----------------------------
     TrajectoryOptimizer optimizer;
     OptimizationConfig opt_config;
     opt_config.avg_vel = 2.0; 
     opt_config.max_vel = 3.0; 
     opt_config.max_acc = 2.0; 
-    opt_config.w_vel = 1.0;   // 速度权重
-    opt_config.w_acc = 3.0;   // 加速度权重
 
-    Trajectory traj = optimizer.solvePolynomial(path, corridors, segments, opt_config);
+    Trajectory trajectory = optimizer.solvePolynomial(path, corridors, segments, opt_config);
 
-    if (!traj.pieces.empty()) {
-        std::cout << "优化成功！总时长: " << traj.getTotalDuration() << "s\n";
-        
-        // ==========================================
-        //  打印每一段的数学表达式
-        // ==========================================
-        std::cout << "\n================ 轨迹数学表达式 ================\n";
-        std::cout << "公式通式 (5阶贝塞尔): P(t) = Σ [ C_i * (1-u)^(5-i) * u^i ]\n";
-        std::cout << "其中 u = t / Duration (归一化时间), C_i = binomial(5,i) * ControlPoint_i\n";
-        
-        // 5阶二项式系数
-        static const int Binom[6] = {1, 5, 10, 10, 5, 1};
-
-        for (size_t k = 0; k < traj.pieces.size(); ++k) {
-            const auto& seg = traj.pieces[k];
-            double T = seg.duration;
-
-            std::cout << "\n--- 第 " << k << " 段 (时长 T = " << std::fixed << std::setprecision(2) << T << " s) ---\n";
-            
-            // 打印控制点信息
-            std::cout << "  控制点 P0-P5: ";
-            for(const auto& p : seg.control_points) {
-                std::cout << "(" << p.x << "," << p.y << ") ";
-            }
-            std::cout << "\n\n";
-
-            // Lambda 函数：打印单个维度的方程fc
-            auto print_poly_equation = [&](const char* axis, auto get_val) {
-                std::cout << "  " << axis << "(t) = ";
-                for (int i = 0; i <= 5; ++i) {
-                    double val = get_val(seg.control_points[i]);
-                    double coef = Binom[i] * val;
-                    
-                    if (i > 0) {
-                        if (coef >= 0) std::cout << " + ";
-                        else std::cout << " "; // 负号会随数字打印出来
-                    }
-                    
-                    // 打印项：Coef * (1-t/T)^(5-i) * (t/T)^i
-                    std::cout << std::defaultfloat << coef;
-                    
-                    if (5 - i > 0) {
-                        if (5 - i == 1) std::cout << "*(1 - t/" << std::fixed << std::setprecision(2) << T << ")";
-                        else            std::cout << "*(1 - t/" << std::fixed << std::setprecision(2) << T << ")^" << (5 - i);
-                    }
-                    
-                    if (i > 0) {
-                        if (i == 1) std::cout << "*(t/" << std::fixed << std::setprecision(2) << T << ")";
-                        else        std::cout << "*(t/" << std::fixed << std::setprecision(2) << T << ")^" << i;
-                    }
-                }
-                std::cout << "\n";
-            };
-
-            print_poly_equation("x", [](const P2& p){ return p.x; });
-            print_poly_equation("y", [](const P2& p){ return p.y; });
-        }
-        std::cout << "===============================================\n\n";
-
-        // 采样并绘图
-        std::vector<Point> display_path;
-        double total_T = traj.getTotalDuration();
-        for (double t = 0; t <= total_T; t += 0.05) {
-            auto p = traj.at(t);
-            display_path.push_back({(int)p.first, (int)p.second});
-        }
-        write_ppm_scaled("optimized_poly_path.ppm", grid, start, goal, display_path, 20);
-        std::cout << "已保存 optimized_poly_path.ppm\n";
-    } else {
-        std::cout << "优化失败。\n";
+    // -----------------------------
+    // 6. 结果处理与可视化
+    // -----------------------------
+    if (trajectory.pieces.empty()) {
+        std::cerr << "优化失败：未生成轨迹 (Optimization Failed)\n";
+        return -1;
     }
+
+    std::cout << "\n================ [优化成功] 轨迹详细信息 ================\n";
+    std::cout << "多项式基底: p(t) = c0 + c1*t + c2*t^2 + c3*t^3\n";
+
+    double total_duration = 0.0;
+    
+    // 打印每一段的详细数学表达式
+    for (size_t k = 0; k < trajectory.pieces.size(); ++k) {
+        const auto& piece = trajectory.pieces[k];
+        total_duration += piece.duration_;
+
+        std::cout << "\n--- 第 " << k << " 段 (时长 T=" << std::fixed << std::setprecision(4) << piece.duration_ << "s) ---\n";
+        
+        // 打印 X 轴公式
+        std::cout << "  x(t) = ";
+        for(size_t i = 0; i < piece.polynomial_x_coefficients_.size(); ++i) {
+            double c = piece.polynomial_x_coefficients_[i];
+            if(i > 0 && c >= 0) std::cout << "+";
+            
+            // 打印系数
+            std::cout << std::scientific << std::setprecision(2) << c;
+            
+            if(i > 0) {
+                std::cout << " * (t/" << std::fixed << std::setprecision(2) << piece.duration_ << ")^" << i;
+            }
+            std::cout << " ";
+        }
+        std::cout << "\n";
+
+        // Y 轴
+        std::cout << "  y(t) = ";
+        for(size_t i = 0; i < piece.polynomial_y_coefficients_.size(); ++i) {
+            double c = piece.polynomial_y_coefficients_[i];
+            if(i > 0 && c >= 0) std::cout << "+";
+            std::cout << std::scientific << std::setprecision(2) << c;
+            if(i > 0) {
+                std::cout << " * (t/" << std::fixed << std::setprecision(2) << piece.duration_ << ")^" << i;
+            }
+            std::cout << " ";
+        }
+        std::cout << "\n";
+    }
+    std::cout << "========================================================\n";
+    std::cout << "轨迹总时长: " << std::fixed << std::setprecision(2) << total_duration << " s\n";
+
+    // 6.2 轨迹采样 (Sampling)
+    std::vector<Point> final_path_points;
+    double dt = 0.05; // 采样步长 50ms
+
+    for (const auto& piece : trajectory.pieces) {
+        for (double t = 0; t < piece.duration_; t += dt) {
+            std::pair<double, double> pos = piece.evaluate(t);
+            final_path_points.push_back({
+                static_cast<int>(std::round(pos.first)), 
+                static_cast<int>(std::round(pos.second))
+            });
+        }
+        std::pair<double, double> end_pos = piece.evaluate(piece.duration_);
+        final_path_points.push_back({
+            static_cast<int>(std::round(end_pos.first)), 
+            static_cast<int>(std::round(end_pos.second))
+        });
+    }
+
+    std::cout << "采样点数: " << final_path_points.size() << "\n";
+
+    // 6.3 生成最终结果图像
+    write_ppm_scaled("final_trajectory.ppm", grid, start, goal, final_path_points, 20);
+    std::cout << "已生成 final_trajectory.ppm\n";
 
     return 0;
 }

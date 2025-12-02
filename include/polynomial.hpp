@@ -4,48 +4,61 @@
 #include <iostream>
 #include "grid.hpp"
 
-// 5阶贝塞尔曲线段
-// P(t) = (1-t)^5*P0 + 5(1-t)^4*t*P1 + 10(1-t)^3*t^2*P2 + 10(1-t)^2*t^3*P3 + 5(1-t)*t^4*P4 + t^5*P5, t in [0,1]
-class BezierCurve {
+
+class PolynomialCurve {
 public:
-    std::vector<P2> control_points; // 6个控制点
-    double duration;                   // 该段时长 T
+    int degree_ = 3;
+    std::vector<double> polynomial_x_coefficients_;
+    std::vector<double> polynomial_y_coefficients_;
+    double duration_;
 
-    BezierCurve() = default;
-
-    // 计算 t 时刻的位置 (t in [0, duration])
-    std::pair<double, double> evaluate(double t) const {
-        if (t <= 0) t = 0;
-        if (t >= duration) t = duration;
-        double u = t / duration;
-        int n = 5;
-        // 5阶系数: 1, 5, 10, 10, 5, 1
-        static const int C[6] = {1, 5, 10, 10, 5, 1};
-        double x = 0.0, y = 0.0;
-        for (int i = 0; i <= n; ++i) {
-            double b = C[i] * std::pow(1 - u, n - i) * std::pow(u, i);
-            x += b * control_points[i].x;
-            y += b * control_points[i].y;
+    PolynomialCurve(int degree = 3) 
+        : degree_(degree), 
+          duration_(0.0) 
+        {
+            polynomial_x_coefficients_.reserve(degree_ + 1);
+            polynomial_y_coefficients_.reserve(degree_ + 1);
         }
+
+    std::pair<double, double> evaluate(double t) const {
+        double x = 0.0;
+        double y = 0.0;
+
+        // 归一化处理
+        if (duration_ < 1e-4) return {0,0}; 
+        if (t < 0) t = 0;
+        if (t > duration_) t = duration_;
+        
+        double s = t / duration_; // s in [0, 1]
+
+        // x = c0 + s*(c1 + s*(c2 + s*c3))
+        for (int i = polynomial_x_coefficients_.size() - 1; i >= 0; --i) {
+            x = polynomial_x_coefficients_[i] + s * x;
+            y = polynomial_y_coefficients_[i] + s * y;
+        }
+        
         return {x, y};
     }
 };
 
 struct Trajectory {
-    std::vector<BezierCurve> pieces;
+    std::vector<PolynomialCurve> pieces;
 
     // 计算 t 时刻的位置
     std::pair<double, double> at(double t) const {
         if (pieces.empty()) return {0,0};
         for (const auto& curve : pieces) {
-            if (t <= curve.duration) return curve.evaluate(t);
-            t -= curve.duration;
+            if (t <= curve.duration_) {
+                return curve.evaluate(t);
+            }
+            t -= curve.duration_;
         }
-        return pieces.back().evaluate(pieces.back().duration);
+        return pieces.back().evaluate(pieces.back().duration_);
     }
+
     double getTotalDuration() const {
         double sum = 0;
-        for(auto& p : pieces) sum += p.duration;
+        for(auto& p : pieces) sum += p.duration_;
         return sum;
     }
 };
